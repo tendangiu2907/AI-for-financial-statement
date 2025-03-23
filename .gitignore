@@ -1,3 +1,10 @@
 venv
 __pycache__/
 *.py[cod]
+
+.vscode/
+extracted-files/
+uploads/
+model
+output.json
+secret.py

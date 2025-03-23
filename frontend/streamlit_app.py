@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import requests
 from io import BytesIO
-from config import API_URL  # Import hằng số từ file cấu hình
+from config import API_URL, detect_table_endpoint  # Import hằng số từ file cấu hình
 
 # Cấu hình giao diện đa trang
 st.set_page_config(page_title='PDF Table Detection', page_icon='📄', layout='wide')
@@ -14,7 +14,7 @@ page = st.sidebar.radio('Chọn trang', ['Trang 1: Phát hiện bảng từ PDF'
 # Hàm gọi API detect bảng từ PDF
 def detect_table_in_pdf(uploaded_file):
     try:
-        response = requests.post(f"{API_URL}/api/detect_table", files={"file": uploaded_file})
+        response = requests.post(detect_table_endpoint, files={"file": uploaded_file})
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -31,27 +31,36 @@ if page == 'Trang 1: Phát hiện bảng từ PDF':
     if uploaded_file is not None:
         st.success("Đã tải lên thành công!")
 
-        # Nút gọi API để detect bảng
-        if st.button("Detect bảng trong PDF"):
+        # Tạo một biến trạng thái để quản lý nút Detect
+        detect_button = st.button("Detect bảng trong PDF")
+
+        if detect_button:
             with st.spinner("Đang xử lý..."):
+                # Disable nút Detect
+                st.session_state['detect_disabled'] = True
+
                 # Gọi hàm detect bảng từ PDF
                 data = detect_table_in_pdf(uploaded_file)
+
+                # Kích hoạt lại nút Detect
+                st.session_state['detect_disabled'] = False
+
                 if data is not None:
-                    df = pd.DataFrame(data)
                     st.write("### Kết quả phân tích:")
-                    st.dataframe(df)
 
-                    # Nút download kết quả dưới dạng Excel
-                    output = BytesIO()
-                    df.to_excel(output, index=False)
-                    output.seek(0)
+                    # Hiển thị các bảng từ kết quả trả về
+                    for table_name, records in data.get("tables", {}).items():
+                        st.write(f"#### Bảng: {table_name}")
+                        df = pd.DataFrame(records)
+                        st.dataframe(df)
 
-                    st.download_button(
-                        label="📥 Tải về kết quả dưới dạng Excel",
-                        data=output,
-                        file_name="result.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                    )
+                    # Nút download kết quả từ download_url
+                    extracted_file_path = data.get("extracted_file_path")
+                    if extracted_file_path:
+                        download_url = f"{API_URL}{extracted_file_path}" 
+                        st.markdown(f"[📥 Tải về kết quả tại đây]({download_url})", unsafe_allow_html=True)
+                    else:
+                        st.warning("Không tìm thấy đường dẫn tải về.")
 else:
     st.title('🚧 Trang 2: Tùy chỉnh')
     st.write("Trang này sẽ được thiết kế sau.")
