@@ -67,17 +67,17 @@ class TableDetectService:
             + Nếu hình đó có chứa table:
                 > Sử dụng model best_model_YOlO để detect ra bẳng
         """
-        recognized_titles_set = set()
-        dfs_dict = {}
+        recognized_titles_set = set() # biến này để tạo 1 set lưu trữ những bảng mình đã trích xuất, khi nào đủ 3 bảng rồi thì dừng chương tình
+        dfs_dict = {} # Biến này để concat dữ liệu từng bảng, vì bảng có thể dài quá bị chuyển sang page khác
 
 
         images = self.pdf_to_images(pdf_path)  # Chuyển pdf thành hình ảnh
 
         index_start = 0  # Bắt đầu từ ảnh đầu tiên
         while index_start < len(images):
-            index_chuky = None  # Reset mỗi lần lặp
+            index_chuky = None  # Reset mỗi lần lặp 
             for i in range(index_start, len(images)):
-                selected_images = []
+                selected_images = [] #Tạo 1 list để lưu các bảng chung 1 title đi từ title đến ảnh chữ ký đầu tiên nhận diện được
                 image = images[i]
                 print(f"🔍 Đang xử lý ảnh {i+1}")
 
@@ -104,16 +104,16 @@ class TableDetectService:
                 #     ocr,
                 # )
 
-                df_title, text_title = self.detect_and_extract_title(image_to_process)
+                df_title, text_title = self.detect_and_extract_title(image_to_process) # hàm nhận diện các text ngoài bảng và trả về 1 DataFrame và 1 biến lưu text để cho LLM nhận ngữ cảnh
 
                 # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
                 time.sleep(45)
 
                 for model in models:
-                    temperature, top_p, top_k = self.get_model_params(model)
+                    temperature, top_p, top_k = self.get_model_params(model) # Setup model, hiện tại đang dùng 2 model LLM từng model từng tham số
                     for api_key in api_keys:
-                        json_title = retry_api_call(
-                            self.generate_title,
+                        json_title = retry_api_call(         #Hàm này để thay API luân phiên
+                            self.generate_title,            # Hàm này để dùng LLM chuẩn hóa lại dữ liệu tiếng Việt cho các Text ngoài bảng
                             model,
                             api_keys[api_key]["title"],
                             temperature,
@@ -153,10 +153,10 @@ class TableDetectService:
                 if selected_images:
                     pre_name_column = None
                     for img in selected_images:
-                        processed_image = self.Process_Image(img)
+                        processed_image = self.Process_Image(img) # Hàm này nhận diện bảng trong page rồi cắt bảng, xoay bảng nếu có
                         if processed_image is not None:
-                            df_table, text_table = self.process_pdf_image(processed_image)
-                            if not df_table.empty:
+                            df_table, text_table = self.process_pdf_image(processed_image) # Hàm này dùng OCR để trích xuất thông tin trong bảng, trả về 1 DataFrame và 1 text để giúp LLM hiểu ngữ nghĩa
+                            if not df_table.empty:    #Cái này để điều chỉnh token, ít token quá thì LLM kh trả đủ dữ liệu, nhiều quá thì nhanh tốn
                                 if (len(df_table) < 101) and (len(df_table.columns) < 10):
                                     token = 9000
                                 elif (len(df_table) < 201) and (len(df_table.columns) < 10):
@@ -167,8 +167,8 @@ class TableDetectService:
                                 for model in models:
                                     temperature, top_p, top_k = self.get_model_params(model)
                                     for api_key in api_keys:
-                                        json_table = retry_api_call(
-                                            self.generate_table,
+                                        json_table = retry_api_call(    #Hàm này để thay luân phiên API key
+                                            self.generate_table,            #Dùng LLM để chuẩn hóa, fix lại dữ liệu đọc từ bảng
                                             model,
                                             api_keys[api_key]["table"],
                                             temperature,
@@ -188,8 +188,8 @@ class TableDetectService:
                                 data_table = json_to_dataframe(json_table)
 
                                 found = False  # Flag để thoát cả hai vòng lặp khi tìm thấy kết quả
-                                for column in data_table.columns:
-                                    for value in data_table[column].dropna():
+                                for column in data_table.columns:   # Ở phần này để giúp chuẩn hóa lại tên bảng, giúp gộp dữ liệu chuẩn hơn
+                                    for value in data_table[column].dropna(): #Có 1 số báo cáo tài chính bị sai tên bảng
                                         value = self.normalize_text(value)
 
                                         if "luu chuyen" in value:
@@ -212,10 +212,10 @@ class TableDetectService:
 
                                 print(f"Fix nhận diện được là {recognized_title}")
 
-                                recognized_titles_set.add(recognized_title)
+                                recognized_titles_set.add(recognized_title) #Lưu nó vào set đã tạo ở trước, giúp nhận diện nào đủ 3 bảng thì dừng lại
                                 # display(data_table)
                                 if selected_images.index(img) == 0:
-                                    pre_name_column = data_table.columns.tolist()
+                                    pre_name_column = data_table.columns.tolist() # Vì model LLM hay trả kết quả về 1 lúc 1 khác nên dùng tên các cột của bảng đầu tiên làm chuẩn để các bảng sau trả về cho chuẩn
                                 else:
                                     if len(data_table.columns) == len(pre_name_column):
                                         data_table.columns = pre_name_column
@@ -224,8 +224,8 @@ class TableDetectService:
                                             columns=pre_name_column, fill_value=None
                                         )
 
-                                if not data_table.empty:
-                                    if recognized_title not in dfs_dict:
+                                if not data_table.empty:                            #Ở đây kiểm tra trong biến dfs_dict đã có DataFrame với key là tiitle đang nhận diện chưa, nếu chưa thì lưu vào biến dfs_dict DataFrame với key đấy
+                                    if recognized_title not in dfs_dict:            # Nếu ở trong dfs_dict đã có DataFrame với key là titile đang nhận diện thì nó sẽ nối (concat dữ liệu lại dựa trên key là title đấy)
                                         dfs_dict[recognized_title] = data_table
                                     else:
                                         dfs_dict[recognized_title] = pd.concat(
@@ -236,8 +236,9 @@ class TableDetectService:
 
                     break # beak để cập nhật lại ví trí bắt đầu là 
                 
-            # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
-            if index_chuky:
+            # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo. Vì cách chạy là ví dụ bảng Cân đối kế toán ở trước
+            # Thì xác định được index_chuky của bảng Cân đối kế toán rồi thì update lại lên vòng lặp cho nó chạy từ chữ ký chạy tiếp.
+            if index_chuky:        
                 index_start = index_chuky + 1
             else:
                 index_start = i + 1
