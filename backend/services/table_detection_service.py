@@ -23,7 +23,7 @@ from datetime import datetime
 # import base64
 # import tempfile
 
-from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, POPPLER_PATH, financial_tables, models, EXTRACTED_FOLDER
+from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, POPPLER_PATH, financial_tables, model, EXTRACTED_FOLDER, financial_tables_general
 from utils import retry_api_call, dataframe_to_json, json_to_dataframe
 from secret import api_keys
 
@@ -109,28 +109,23 @@ class TableDetectService:
                 # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
                 time.sleep(45)
 
-                for model in models:
-                    temperature, top_p, top_k = self.get_model_params(model)
-                    for api_key in api_keys:
-                        json_title = retry_api_call(
-                            self.generate_title,
-                            model,
-                            api_keys[api_key]["title"],
-                            temperature,
-                            top_p,
-                            top_k,
-                            dataframe_to_json(df_title),
-                            text_title,
-                        )
-                        if json_title:
-                            break
+                #for model in models:
+                #    temperature, top_p, top_k = self.get_model_params(model)
+                for api_key in api_keys:
+                    json_title = retry_api_call(
+                        self.generate_title,
+                        model,
+                        api_keys[api_key]["title"],
+                        dataframe_to_json(df_title),
+                        text_title)
                     if json_title:
                         break
+                print(json_title)
                 print("Hoàn tất thử API.")
 
                 data_title = json_to_dataframe(json_title)  # Kết quả title của bảng
                 recognized_title = self.recognize_financial_table(
-                    data_title, financial_tables, threshold=80
+                    data_title, financial_tables_general, threshold=80
                 )  # Nhận diện xem title của bảng là gì có phù hợp với 3 tên bảng dự án đề ra không
 
                 # Nếu nhận diện được title, thêm vào danh sách nhận diện
@@ -154,6 +149,10 @@ class TableDetectService:
                     pre_name_column = None
                     for img in selected_images:
                         processed_image = self.Process_Image(img)
+                         # 2️⃣ Chuyển đổi ảnh sang CMYK và lấy kênh K
+                        _, _, _, black_channel = self.rgb_to_cmyk(processed_image)
+                        # 3️⃣ Điều chỉnh độ sáng & độ tương phản
+                        processed_image = self.adjust_contrast(black_channel, alpha=2.0, beta=-50)
                         if processed_image is not None:
                             df_table, text_table = self.process_pdf_image(processed_image)
                             if not df_table.empty:
@@ -164,52 +163,40 @@ class TableDetectService:
                                 else:
                                     token = 30000
                                 time.sleep(45)
-                                for model in models:
-                                    temperature, top_p, top_k = self.get_model_params(model)
-                                    for api_key in api_keys:
-                                        json_table = retry_api_call(
-                                            self.generate_table,
-                                            model,
-                                            api_keys[api_key]["table"],
-                                            temperature,
-                                            top_p,
-                                            top_k,
-                                            dataframe_to_json(df_table),
-                                            text_table,
-                                            token,
-                                            pre_name_column,
-                                        )
-                                        if json_table:
-                                            break
+                                for api_key in api_keys:
+                                    json_table = retry_api_call(
+                                        self.generate_table,
+                                        model,
+                                        api_keys[api_key]["table"],
+                                        dataframe_to_json(df_table),
+                                        text_table,
+                                        token,
+                                        pre_name_column)
                                     if json_table:
                                         break
+                                print(json_table)    
                                 print("Hoàn tất thử API.")
 
                                 data_table = json_to_dataframe(json_table)
 
-                                found = False  # Flag để thoát cả hai vòng lặp khi tìm thấy kết quả
-                                for column in data_table.columns:
-                                    for value in data_table[column].dropna():
-                                        value = self.normalize_text(value)
+                                if selected_images.index(img) ==0:
+                                    found = False  # Flag để thoát cả hai vòng lặp khi tìm thấy kết quả
+                                    recognized_title = "Bảng cân đối kế toán"
+                                    for column in data_table.columns:
+                                        for value in data_table[column].dropna():
+                                            value = self.normalize_text(value)
 
-                                        if "luu chuyen" in value:
-                                            recognized_title = "Báo cáo lưu chuyển tiền tệ"
-                                            found = True
-                                            break  # Thoát khỏi vòng lặp giá trị trong cột
+                                            if "luu chuyen" in value:
+                                                recognized_title = "Báo cáo lưu chuyển tiền tệ"
+                                                found = True
+                                                break  # Thoát khỏi vòng lặp giá trị trong cột
 
-                                        if (
-                                            "doanh thu ban hang" in value
-                                            or "ban hang" in value
-                                        ):
-                                            recognized_title = (
-                                                "Báo cáo kết quả hoạt động kinh doanh"
-                                            )
-                                            found = True
-                                            break  # Thoát khỏi vòng lặp giá trị trong cột
-
-                                    if found:
-                                        break  # Thoát khỏi vòng lặp cột
-
+                                            elif "doanh thu ban hang" in value or "ban hang" in value:
+                                                recognized_title = "Báo cáo kết quả hoạt động kinh doanh"
+                                                found = True
+                                                break  # Thoát khỏi vòng lặp giá trị trong cột
+                                        if found:
+                                            break  # Thoát khỏi vòng lặp cột
                                 print(f"Fix nhận diện được là {recognized_title}")
 
                                 recognized_titles_set.add(recognized_title)
@@ -265,7 +252,36 @@ class TableDetectService:
 
         return dfs_dict, download_url
     
-        
+    def rgb_to_cmyk(self,image):
+        """ Chuyển đổi ảnh từ RGB sang không gian màu CMYK """
+        if isinstance(image, Image.Image):
+            image = np.array(image, dtype=np.uint8)
+        b, g, r = cv2.split(image)
+        # Chuyển giá trị pixel về khoảng [0,1]
+        r = r / 255.0
+        g = g / 255.0
+        b = b / 255.0
+
+        # Tính toán kênh K (đen)
+        k = 1 - np.max([r, g, b], axis=0)
+
+        # Tránh chia cho 0
+        c = (1 - r - k) / (1 - k + 1e-10)
+        m = (1 - g - k) / (1 - k + 1e-10)
+        y = (1 - b - k) / (1 - k + 1e-10)
+
+        # Đưa về khoảng giá trị 0-255
+        c = (c * 255).astype(np.uint8)
+        m = (m * 255).astype(np.uint8)
+        y = (y * 255).astype(np.uint8)
+        k = (k * 255).astype(np.uint8)
+
+        return c, m, y, k
+
+    def adjust_contrast(self,image, alpha=2.0, beta=-50):
+        """ Điều chỉnh độ tương phản và độ sáng """
+        adjusted = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+        return adjusted
     def pdf_to_images(self, pdf_path):
         images = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
         return images
@@ -323,7 +339,7 @@ class TableDetectService:
 
     # sử dụng model từ models = ["gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21"]
     # chuyển API key sang file config
-    def generate_title(self, model, API, temperature, top_p, top_k, path_title_json, text_title):
+    def generate_title(self, model, API, path_title_json, text_title):
         result = ""
         client = genai.Client(api_key=f"{API}")
 
@@ -353,12 +369,8 @@ class TableDetectService:
         ]
 
         generate_content_config = types.GenerateContentConfig(
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
             max_output_tokens=8192,
-            response_mime_type="application/json",
-        )
+            response_mime_type="application/json")
 
         for chunk in client.models.generate_content_stream(
             model=model,
@@ -370,7 +382,7 @@ class TableDetectService:
 
     # sử dụng model từ models = ["gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21"]
     # chuyển API key sang file config
-    def generate_table(self, model, API, temperature, top_p, top_k, path_dataframe_json, text_table, token, table_columns):
+    def generate_table(self, model, API, path_dataframe_json, text_table, token, table_columns):
         result = ""
         client = genai.Client(api_key=f"{API}")  # Đuôi nc
 
@@ -391,7 +403,7 @@ class TableDetectService:
     - Lỗi ngữ pháp tiếng Việt
     - Sắp xếp sai dòng/cột, ảnh hưởng đến tính chính xác của báo cáo tài chính.
 
-    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Kết quả trả về là một DataFrame chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
+    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Yêu cầu kết quả trả về chuẩn định dạng DataFrame không gặp bất kỳ lỗi nào chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
     đảm bảo đúng thông tin được truyền vào từ biến {text_table} và Dữ liệu JSON gốc không sai kết quả.
     Đây là báo cáo kết quả hoạt động kinh doanh của công ty ABC.
     Bạn hãy kiểm tra nếu danh sách tên cột {table_columns} rỗng thì hãy nhận diện để đặt tên cột mặc định bắt buộc phải có chứa 3 cột: "Mã số", "Tên chỉ tiêu", "Thuyết minh" và chuẩn hóa các cột sau: "Mã số", "Tên chỉ tiêu", "Thuyết minh".
@@ -409,12 +421,8 @@ class TableDetectService:
         ]
 
         generate_content_config = types.GenerateContentConfig(
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
             max_output_tokens=token,
-            response_mime_type="application/json",
-        )
+            response_mime_type="application/json")
 
         for chunk in client.models.generate_content_stream(
             model=model,
@@ -616,8 +624,6 @@ class TableDetectService:
         return None
 
     def get_model_params(self, model):
-        if model == "gemini-2.0-pro-exp-02-05":
+        if model == "gemini-2.0-flash":
             return 1, 0.95, 64
-        elif model == "gemini-2.0-flash-thinking-exp-01-21":
-            return 0.7, 0.95, 64
         return None
