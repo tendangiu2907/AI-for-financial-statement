@@ -79,12 +79,16 @@ class TableDetectService:
             for i in range(index_start, len(images)):
                 selected_images = []
                 image = images[i]
-                print(f"🔍 Đang xử lý ảnh {i+1}")
+                print(f"======== BẮT ĐẦU XỬ LÝ ẢNH {i+1} ========")
+
 
                 # Nhận diện bảng -> table-title
+                print(f"==== Kiểm tra bảng trong ảnh ====")
                 nhandien_table = self.table_detection(image)
 
                 if not nhandien_table:
+                    print(f"==== Ảnh không có bảng, chuyển sang ảnh tiếp theo ====")
+                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TABLE ========\n\n\n\n")
                     continue  # Nếu không có bảng, bỏ qua ảnh này
 
                 has_rotated_table = any(
@@ -97,20 +101,8 @@ class TableDetectService:
                     self.table_rotation(image, nhandien_table) if has_rotated_table else image
                 )
 
-                # Nhận diện tiêu đề --> phân vân
-                # df_title, text_title = self.detect_and_extract_title(
-                #     image_to_process,
-                #     "/content/drive/MyDrive/Test AI ở Orient/AI_for_Finance/Bản sao của best_model_YoLo.pt",
-                #     ocr,
-                # )
-
+                print(f"==== Nhận diện title của bảng ====")
                 df_title, text_title = self.detect_and_extract_title(image_to_process)
-
-                # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
-                time.sleep(45)
-
-                #for model in models:
-                #    temperature, top_p, top_k = self.get_model_params(model)
                 for api_key in api_keys:
                     json_title = retry_api_call(
                         self.generate_title,
@@ -120,8 +112,9 @@ class TableDetectService:
                         text_title)
                     if json_title:
                         break
-                print(json_title)
-                print("Hoàn tất thử API.")
+                print("==== Hoàn tất thử API cho nhận diện title ====")
+                print("==== Kết quả title ====")
+                print(f"{json_title}")
 
                 data_title = json_to_dataframe(json_title)  # Kết quả title của bảng
                 recognized_title = self.recognize_financial_table(
@@ -130,22 +123,34 @@ class TableDetectService:
 
                 # Nếu nhận diện được title, thêm vào danh sách nhận diện
                 if not (recognized_title):
+                    print(f"==== Không tìm thấy title trong ảnh ====")
+                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TITLE========\n\n\n\n")
+                    # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
+                    time.sleep(45)
                     continue
+
+                print(f"==== Nhận diện được title của ảnh là : {recognized_title} ====")
+
                 # Tìm ảnh chữ ký tiếp theo sau ảnh title
+                print(f"==== Nhận diện chữ kí từ ảnh tiếp theo ====")
                 for j in range(images.index(image), len(images)):
                     nhandien_chuky = images[j]
                     results_chuky = self.detect_signature(nhandien_chuky)
                     if results_chuky[0]:
                         index_chuky = j  # Lưu vị trí ảnh chữ ký
-                        print(f"🖊 Ảnh chữ ký được phát hiện ở {index_chuky +1 }")
+                        print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
                         break
 
                 # Lấy danh sách ảnh từ title đến chữ ký
                 if index_chuky:
                     selected_images.extend(images[images.index(image) : index_chuky + 1])
 
+                print(f"==== Cho model giải lao trước khi nhận diện thông tin bảng ====")
+                time.sleep(45)
+
                 # Vòng lặp qua ảnh từ title đến chữ ký để trích xuất bảng
                 if selected_images:
+                    print(f"==== Nhận diện thông tin của bảng {recognized_title} ====")
                     pre_name_column = None
                     for img in selected_images:
                         processed_image = self.Process_Image(img)
@@ -155,6 +160,8 @@ class TableDetectService:
                         processed_image = self.adjust_contrast(black_channel, alpha=2.0, beta=-50)
                         if processed_image is not None:
                             df_table, text_table = self.process_pdf_image(processed_image)
+                            print(f"Check json data: ", dataframe_to_json(df_table))
+                            print()
                             if not df_table.empty:
                                 if (len(df_table) < 101) and (len(df_table.columns) < 10):
                                     token = 9000
@@ -162,10 +169,9 @@ class TableDetectService:
                                     token = 18000
                                 else:
                                     token = 30000
-                                time.sleep(45)
                                 for api_key in api_keys:
                                     json_table = retry_api_call(
-                                        self.generate_table,
+                                        self.generate_table_1,
                                         model,
                                         api_keys[api_key]["table"],
                                         dataframe_to_json(df_table),
@@ -174,8 +180,9 @@ class TableDetectService:
                                         pre_name_column)
                                     if json_table:
                                         break
+                                print("==== Hoàn tất thử API cho nhận diện thông tin của bảng ====")
+                                print(f"==== Kết quả thông tin của bảng {recognized_title} ====")
                                 print(json_table)    
-                                print("Hoàn tất thử API.")
 
                                 data_table = json_to_dataframe(json_table)
 
@@ -197,7 +204,6 @@ class TableDetectService:
                                                 break  # Thoát khỏi vòng lặp giá trị trong cột
                                         if found:
                                             break  # Thoát khỏi vòng lặp cột
-                                print(f"Fix nhận diện được là {recognized_title}")
 
                                 recognized_titles_set.add(recognized_title)
                                 # display(data_table)
@@ -219,9 +225,11 @@ class TableDetectService:
                                             [dfs_dict[recognized_title], data_table],
                                             ignore_index=True,
                                         )
-                    # display(dfs_dict[recognized_title])
-
-                    break # beak để cập nhật lại ví trí bắt đầu là 
+                        time.sleep(45)
+                            
+                    print(f"==== Hoàn tất nhận diện thông tin bảng {recognized_title} ====")
+                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} SUCCESS========\n\n\n\n")
+                    break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
                 
             # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
             if index_chuky:
@@ -230,10 +238,11 @@ class TableDetectService:
                 index_start = i + 1
                 # Kiểm tra nếu đã nhận diện đủ bảng tài chính thì dừng
             if recognized_titles_set == set(financial_tables):
-                print("✅ Đã nhận diện đủ tất cả bảng tài chính. Dừng lại!")
+                print("======== ĐÃ NHẬN DIỆN ĐỦ TẤT CẢ CÁC BẢNG TÀI CHÍNH. DỪNG LẠI !! ========\n\n\n\n")
                 break
 
         # Lưu kết quả vào file Excel
+        print(f"======== BẤT ĐẦU LƯU DỮ LIỆU VÀO FILE ========")
         name, _ = file_name_origin.rsplit(".", 1) if "." in file_name_origin else (file_name_origin, "")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Định dạng thời gian: YYYYMMDD_HHMMSS
         new_name = f"{name}_{timestamp}.xlsx"
@@ -241,15 +250,10 @@ class TableDetectService:
         with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer: # TODO: No module named 'xlsxwriter'
             for i, (sheet_name, df) in enumerate(dfs_dict.items()):
                 df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
+                print(f"==== Đã ghi xong bảng {sheet_name[:31]} vào file ====")
+        print(f"======== DỮ LIỆU ĐÃ ĐƯỢC LƯU VÀO {file_path} ========")
 
-                # Nếu không phải lần cuối cùng, thì chờ trước khi gửi request tiếp theo
-                if i < len(dfs_dict) - 1:
-                    print(f"Chờ 30 giây trước khi tiếp tục lưu bảng tiếp theo...")
-                    time.sleep(30)  # Chờ 30 giây giữa các request
-
-        print(f"File Excel đã được lưu tại: {file_path}")
         download_url = f"/{EXTRACTED_FOLDER}/{new_name}"
-
         return dfs_dict, download_url
     
     def rgb_to_cmyk(self,image):
@@ -627,3 +631,100 @@ class TableDetectService:
         if model == "gemini-2.0-flash":
             return 1, 0.95, 64
         return None
+
+    def generate_table_1(self, model, API, path_dataframe_json, text_table, token, table_columns):
+        result = ""
+        client = genai.Client(api_key=f"{API}")
+
+        # Mở file JSON và đọc nội dung
+        with open(path_dataframe_json, "r", encoding="utf-8") as f:
+            json_content = json.load(f)
+
+        contents = [
+            types.Content(
+                role="user",
+                parts=[
+                    types.Part.from_text(
+                        text=f"""Mình đang trích xuất dữ liệu từ hình ảnh chứa bảng tài chính bằng PaddleOCR. Dữ liệu nhận diện được lưu trong {text_table}.
+    Tuy nhiên, dữ liệu gặp lỗi:
+    - Sai chính tả tiếng Việt
+    - Lỗi ngữ pháp tiếng Việt
+    - Sắp xếp sai dòng/cột, ảnh hưởng đến tính chính xác của báo cáo tài chính.
+
+    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Yêu cầu kết quả trả về chuẩn định dạng DataFrame không gặp bất kỳ lỗi nào chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
+    đảm bảo đúng thông tin được truyền vào từ biến {text_table} và Dữ liệu JSON gốc không sai kết quả.
+    Đây là báo cáo kết quả hoạt động kinh doanh của công ty ABC.
+    Bạn hãy kiểm tra nếu danh sách tên cột {table_columns} rỗng thì hãy nhận diện để đặt tên cột mặc định bắt buộc phải có chứa 3 cột: "Mã số", "Tên chỉ tiêu", "Thuyết minh" và chuẩn hóa các cột sau: "Mã số", "Tên chỉ tiêu", "Thuyết minh".
+    Nếu danh sách tên cột {table_columns} không rỗng thì hãy đặt tên cột giống như từng giá trị trong {table_columns} và chuẩn hóa chúng đúng với kiến thức quan trọng cần thiết trong báo cáo tài chính.
+    Tự động nhận diện và chuẩn hóa các cột số liệu, đảm bảo chúng được hiển thị đúng định dạng (ví dụ: số nguyên, số thập phân, đơn vị tiền tệ).
+    Nếu có thể, hãy xác định năm tài chính được đề cập trong báo cáo và sử dụng thông tin này để đặt tên cho các cột số liệu (ví dụ: "Năm 2022", "Năm 2023").
+    Sử dụng tên cột có dấu cách và viết hoa chữ cái đầu tiên của mỗi từ.
+
+    Dữ liệu JSON gốc:
+    {json.dumps(json_content, indent=2, ensure_ascii=False)}
+    """
+                    ),
+                ],
+            ),
+        ]
+
+        generate_content_config = types.GenerateContentConfig(
+            max_output_tokens=token,
+            response_mime_type="application/json",
+            response_schema={
+                "type": "object",
+                "properties": {
+                    "Bảng cân đối kế toán": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "Mã Số": {"type": "integer"},
+                                "Tên Chỉ Tiêu": {"type": "string"},
+                                "Thuyết Minh": {"type": "string"},
+                                "Số cuối năm": {"type": "string"},
+                                "Số đầu năm": {"type": "string"}
+                            },
+                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số cuối năm", "Số đầu năm"]
+                        }
+                    },
+                    "Báo cáo kết quả hoạt động kinh doanh": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "Mã Số": {"type": "integer"},
+                                "Tên Chỉ Tiêu": {"type": "string"},
+                                "Thuyết Minh": {"type": "number"},
+                                "Số Năm Nay": {"type": "number"},
+                                "Số Năm Trước": {"type": "number"}
+                            },
+                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
+                        }
+                    },
+                    "Báo cáo lưu chuyển tiền tệ": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "Mã Số": {"type": "integer"},
+                                "Tên Chỉ Tiêu": {"type": "string"},
+                                "Thuyết Minh": {"type": "number"},
+                                "Số Năm Nay": {"type": "number"},
+                                "Số Năm Trước": {"type": "number"}
+                            },
+                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
+                        }
+                    }
+                },
+                "required": ["Bảng cân đối kế toán", "Báo cáo kết quả hoạt động kinh doanh", "Báo cáo lưu chuyển tiền tệ"]
+            }
+        )
+
+        for chunk in client.models.generate_content_stream(
+            model=model,
+            contents=contents,
+            config=generate_content_config,
+        ):
+            result += chunk.text
+        return result
