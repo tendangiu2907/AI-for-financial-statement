@@ -47,9 +47,14 @@ def dataframe_to_json(df, filename="output.json"):
     df.to_json(filename, orient="columns", indent=4)
     return filename
 
-def json_to_dataframe(json_file):
+def json_to_dataframe_title(json_file):
     data = json.loads(json_file)
     return pd.DataFrame(data)
+
+def json_to_dataframe_table(json_file):
+    data = json.loads(json_file)
+    for i in data.keys():
+        return pd.json_normalize(data[f'{i}'])
 
 def clean_dataframe(df):
     df.replace(r"^\s*$", pd.NA, regex=True, inplace=True)

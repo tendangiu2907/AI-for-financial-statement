@@ -24,7 +24,7 @@ from datetime import datetime
 # import tempfile
 
 from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, POPPLER_PATH, financial_tables, model, EXTRACTED_FOLDER, financial_tables_general
-from utils import retry_api_call, dataframe_to_json, json_to_dataframe
+from utils import retry_api_call, dataframe_to_json, json_to_dataframe_table, json_to_dataframe_title
 from secret import api_keys
 
 
@@ -116,7 +116,7 @@ class TableDetectService:
                 print("==== Kết quả title ====")
                 print(f"{json_title}")
 
-                data_title = json_to_dataframe(json_title)  # Kết quả title của bảng
+                data_title = json_to_dataframe_title(json_title)  # Kết quả title của bảng
                 recognized_title = self.recognize_financial_table(
                     data_title, financial_tables_general, threshold=80
                 )  # Nhận diện xem title của bảng là gì có phù hợp với 3 tên bảng dự án đề ra không
@@ -169,6 +169,8 @@ class TableDetectService:
                                     token = 18000
                                 else:
                                     token = 30000
+                                if selected_images.index(img) ==0:
+                                    response_schema=self.generate_json_schema(dataframe_to_json(df_table))
                                 for api_key in api_keys:
                                     json_table = retry_api_call(
                                         self.generate_table_1,
@@ -177,14 +179,14 @@ class TableDetectService:
                                         dataframe_to_json(df_table),
                                         text_table,
                                         token,
-                                        pre_name_column)
+                                        pre_name_column, response_schema)
                                     if json_table:
                                         break
                                 print("==== Hoàn tất thử API cho nhận diện thông tin của bảng ====")
                                 print(f"==== Kết quả thông tin của bảng {recognized_title} ====")
                                 print(json_table)    
 
-                                data_table = json_to_dataframe(json_table)
+                                data_table = json_to_dataframe_table(json_table)
 
                                 if selected_images.index(img) ==0:
                                     found = False  # Flag để thoát cả hai vòng lặp khi tìm thấy kết quả
@@ -199,7 +201,7 @@ class TableDetectService:
                                                 break  # Thoát khỏi vòng lặp giá trị trong cột
 
                                             elif "doanh thu ban hang" in value or "ban hang" in value:
-                                                recognized_title = "Báo cáo kết quả hoạt động kinh doanh"
+                                                recognized_title = "Báo cáo KQHĐKD"
                                                 found = True
                                                 break  # Thoát khỏi vòng lặp giá trị trong cột
                                         if found:
@@ -374,7 +376,8 @@ class TableDetectService:
 
         generate_content_config = types.GenerateContentConfig(
             max_output_tokens=8192,
-            response_mime_type="application/json")
+            response_mime_type="application/json",
+        )
 
         for chunk in client.models.generate_content_stream(
             model=model,
@@ -383,57 +386,131 @@ class TableDetectService:
         ):
             result += chunk.text
         return result
+    def generate_json_schema(self, json_file_path):
+        """Tạo JSON Schema từ file JSON đầu vào."""
 
-    # sử dụng model từ models = ["gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21"]
-    # chuyển API key sang file config
-    def generate_table(self, model, API, path_dataframe_json, text_table, token, table_columns):
-        result = ""
-        client = genai.Client(api_key=f"{API}")  # Đuôi nc
+        try:
+            with open(json_file_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+        except FileNotFoundError:
+            print(f"Lỗi: Không tìm thấy file JSON tại '{json_file_path}'")
+            return
+        except json.JSONDecodeError:
+            print(f"Lỗi: File '{json_file_path}' không phải là JSON hợp lệ.")
+            return
 
-        # Mở file JSON và đọc nội dung
-        file_path = path_dataframe_json
-        with open(file_path, "r", encoding="utf-8") as f:
-            json_content = json.load(f)  # Load JSON thành dict
+        json_string = json.dumps(json_data, ensure_ascii=False)
 
-        model = model
+        client = genai.Client(api_key="AIzaSyAVa_jH5PG6UnOIpTD0MQztdI4QEPIKs5Y")
+        model = "gemini-2.0-flash"
+
+        prompt = f"""
+        Hãy tạo một JSON Schema từ dữ liệu JSON sau đây:
+
+        {json_string}
+
+        Yêu cầu:
+        1. Tạo một JSON Schema hợp lệ để mô tả cấu trúc dữ liệu JSON.
+        2. Sử dụng các kiểu dữ liệu JSON Schema phù hợp cho từng thuộc tính.
+        3. Nếu có thể, hãy suy ra các ràng buộc (constraints) từ dữ liệu (ví dụ: required, nullable).
+        4. Tạo một schema tổng quát, có thể xử lý các JSON có cấu trúc khác nhau.
+        5. Trả về kết quả là một chuỗi JSON Schema hợp lệ.
+        """
+
         contents = [
             types.Content(
                 role="user",
-                parts=[
-                    types.Part.from_text(
-                        text=f"""Mình đang trích xuất dữ liệu từ hình ảnh chứa bảng tài chính bằng PaddleOCR. Dữ liệu nhận diện được lưu trong {text_table}.
-    Tuy nhiên, dữ liệu gặp lỗi:
-    - Sai chính tả tiếng Việt
-    - Lỗi ngữ pháp tiếng Việt
-    - Sắp xếp sai dòng/cột, ảnh hưởng đến tính chính xác của báo cáo tài chính.
-
-    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Yêu cầu kết quả trả về chuẩn định dạng DataFrame không gặp bất kỳ lỗi nào chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
-    đảm bảo đúng thông tin được truyền vào từ biến {text_table} và Dữ liệu JSON gốc không sai kết quả.
-    Đây là báo cáo kết quả hoạt động kinh doanh của công ty ABC.
-    Bạn hãy kiểm tra nếu danh sách tên cột {table_columns} rỗng thì hãy nhận diện để đặt tên cột mặc định bắt buộc phải có chứa 3 cột: "Mã số", "Tên chỉ tiêu", "Thuyết minh" và chuẩn hóa các cột sau: "Mã số", "Tên chỉ tiêu", "Thuyết minh".
-    Nếu danh sách tên cột {table_columns} không rỗng thì hãy đặt tên cột giống như từng giá trị trong {table_columns} và chuẩn hóa chúng đúng với kiến thức quan trọng cần thiết trong báo cáo tài chính.
-    Tự động nhận diện và chuẩn hóa các cột số liệu, đảm bảo chúng được hiển thị đúng định dạng (ví dụ: số nguyên, số thập phân, đơn vị tiền tệ).
-    Nếu có thể, hãy xác định năm tài chính được đề cập trong báo cáo và sử dụng thông tin này để đặt tên cho các cột số liệu (ví dụ: "Năm 2022", "Năm 2023").
-    Sử dụng tên cột có dấu cách và viết hoa chữ cái đầu tiên của mỗi từ.
-
-    Dữ liệu JSON gốc:
-    {json.dumps(json_content, indent=2, ensure_ascii=False)}
-    """
-                    ),
-                ],
+                parts=[types.Part.from_text(text=prompt)],
             ),
         ]
 
         generate_content_config = types.GenerateContentConfig(
-            max_output_tokens=token,
-            response_mime_type="application/json")
+            response_mime_type="application/json",
+        )
 
+        response_text = ""
+        for chunk in client.models.generate_content_stream(
+            model=model,
+            contents=contents,
+            config=generate_content_config,
+        ):
+            response_text += chunk.text
+
+        try:
+            # Kiểm tra và in JSON Schema hợp lệ
+            json.loads(response_text)
+        except json.JSONDecodeError:
+            print("Lỗi: Kết quả không phải là JSON hợp lệ.")
+            print("Kết quả từ Gemini:")
+
+    def generate_table(self, model, API, path_dataframe_json, text_table, token, table_columns, response_schema):
+        """Tạo bảng dữ liệu từ JSON đầu vào, sử dụng JSON Schema trả về."""
+
+        result = ""
+
+        # Khởi tạo API Client
+        client = genai.Client(api_key=API)
+
+        # Mở file JSON và đọc nội dung
+        with open(path_dataframe_json, "r", encoding="utf-8") as f:
+            json_content = json.load(f)
+
+        # Prompt cải tiến
+        prompt_text = f"""
+        Mình đang xử lý dữ liệu từ hình ảnh chứa bảng tài chính, trích xuất bằng PaddleOCR.
+        Dữ liệu nhận diện được lưu trong {text_table}, nhưng gặp lỗi sai chính tả, ngữ pháp, và cấu trúc bảng.
+
+        Dựa vào bố cục và nội dung JSON gốc, bạn hãy:
+        - Sửa lỗi chính tả, ngữ pháp tiếng Việt.
+        - Sắp xếp lại dữ liệu để đảm bảo đúng thứ tự dòng/cột theo chuẩn báo cáo tài chính.
+        - Đặt tên cột đúng chuẩn. Nếu danh sách {table_columns} rỗng, đặt mặc định gồm "Mã số", "Tên chỉ tiêu", "Thuyết minh".
+        - Chuẩn hóa dữ liệu số (định dạng số nguyên/thập phân, đơn vị tiền tệ).
+        - Định dạng các cột số theo tên chỉ tiêu (ví dụ: khoản chi phí hiển thị trong dấu '()' hoặc '-').
+        - Nhận diện khoảng thời gian tài chính và đặt tên cột số liệu theo thời gian được nhận diện (Ví dụ "Năm 2022", "Năm 2023").
+
+        Ví dụ về JSON đầu ra mong muốn:
+        {{
+            "dataframe": [
+                {{
+                    "Mã số": "123",
+                    "Tên chỉ tiêu": "Doanh thu bán hàng",
+                    "Thuyết minh": "Doanh thu từ hoạt động bán hàng",
+                    "Năm 2022": 1000000,
+                    "Năm 2023": 1200000
+                }},
+                {{
+                    "Mã số": "456",
+                    "Tên chỉ tiêu": "Chi phí quản lý",
+                    "Thuyết minh": "Chi phí quản lý doanh nghiệp",
+                    "Năm 2022": -200000,
+                    "Năm 2023": -250000
+                }}
+            ]
+        }}
+
+        Dữ liệu JSON gốc:
+        {json.dumps(json_content, indent=2, ensure_ascii=False)}
+        """
+
+        # Cấu hình request đến API
+        contents = [
+            types.Content(role="user", parts=[types.Part.from_text(text=prompt_text)])
+        ]
+
+        generate_content_config = types.GenerateContentConfig(
+            max_output_tokens=token,
+            response_mime_type="application/json",
+            response_schema=response_schema  # Sử dụng schema truyền vào
+        )
+
+        # Gửi yêu cầu và nhận kết quả
         for chunk in client.models.generate_content_stream(
             model=model,
             contents=contents,
             config=generate_content_config,
         ):
             result += chunk.text
+
         return result
 
     def process_image_ocr(self, image):
@@ -531,7 +608,7 @@ class TableDetectService:
 
     # model nhận diện chữ kí
     def detect_signature(self, image):
-        return self.signature_detection_model(image)
+        return self.signature_detection_model(image, conf=0.7)
 
     # model nhận diện table title
     def detect_and_extract_title(self, image):

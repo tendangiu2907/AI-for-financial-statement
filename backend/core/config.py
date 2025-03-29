@@ -9,8 +9,8 @@ ALLOWED_EXTENSIONS = {"pdf"}
 
 financial_tables = [
     "Bảng cân đối kế toán",
-    "Báo cáo kết quả hoạt động kinh doanh",
-    "Báo cáo lưu chuyển tiền tệ",
+    "Báo cáo KQHĐKD",
+    "Báo cáo lưu chuyển tiền tệ"
 ]
 financial_tables_general=["Bảng cân đối kế toán",
 "Báo cáo kết quả hoạt động kinh doanh",
