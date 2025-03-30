@@ -1,8 +1,9 @@
 from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import JSONResponse
 from services.table_detection_service import TableDetectService
 from core.config import UPLOAD_DIR
 from utils import save_temp_pdf, allowed_file
-
+import orjson
 
 router = APIRouter()
 
@@ -36,7 +37,7 @@ async def detect_table(
         }
 
         # Trả về kết quả
-        return result
+        return JSONResponse(content=orjson.loads(orjson.dumps(result, option=orjson.OPT_SERIALIZE_NUMPY)))
 
     except Exception as e:
         print("Router detect_table lỗi: ", e)
