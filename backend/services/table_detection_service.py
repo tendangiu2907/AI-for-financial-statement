@@ -69,8 +69,6 @@ class TableDetectService:
         """
         recognized_titles_set = set()
         dfs_dict = {}
-        recognized_titles_set = set()
-        dfs_dict = {}
 
 
         images = self.pdf_to_images(pdf_path)  # Chuyển pdf thành hình ảnh
@@ -78,26 +76,18 @@ class TableDetectService:
         index_start = 0  # Bắt đầu từ ảnh đầu tiên
         while index_start < len(images):
             index_chuky = None  # Reset mỗi lần lặp
-            index_chuky = None  # Reset mỗi lần lặp
             for i in range(index_start, len(images)):
-                selected_images = []
                 selected_images = []
                 image = images[i]
                 print(f"======== BẮT ĐẦU XỬ LÝ ẢNH {i+1} ========")
 
-                print(f"======== BẮT ĐẦU XỬ LÝ ẢNH {i+1} ========")
-
-
                 # Nhận diện bảng -> table-title
-                print(f"==== Kiểm tra bảng trong ảnh ====")
                 print(f"==== Kiểm tra bảng trong ảnh ====")
                 nhandien_table = self.table_detection(image)
 
                 if not nhandien_table:
                     print(f"==== Ảnh không có bảng, chuyển sang ảnh tiếp theo ====")
-                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TABLE ========\n\n\n\n")
-                    print(f"==== Ảnh không có bảng, chuyển sang ảnh tiếp theo ====")
-                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TABLE ========\n\n\n\n")
+                    print(f"======== KẾT THÚC XỬ LÝ ẢNH {i+1} NO_TABLE ========\n\n\n\n")
                     continue  # Nếu không có bảng, bỏ qua ảnh này
 
                 has_rotated_table = any(
@@ -110,15 +100,6 @@ class TableDetectService:
                     self.table_rotation(image, nhandien_table) if has_rotated_table else image
                 )
 
-                print(f"==== Nhận diện title của bảng ====")
-                df_title, text_title = self.detect_and_extract_title(image_to_process)
-                for api_key in api_keys:
-                    json_title = retry_api_call(
-                        self.generate_title,
-                        model,
-                        api_keys[api_key]["title"],
-                        dataframe_to_json(df_title),
-                        text_title)
                 print(f"==== Nhận diện title của bảng ====")
                 df_title, text_title = self.detect_and_extract_title(image_to_process)
                 for api_key in api_keys:
@@ -145,26 +126,17 @@ class TableDetectService:
                     print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TITLE========\n\n\n\n")
                     # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
                     time.sleep(45)
-                    print(f"==== Không tìm thấy title trong ảnh ====")
-                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TITLE========\n\n\n\n")
-                    # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
-                    time.sleep(45)
                     continue
 
                 print(f"==== Nhận diện được title của ảnh là : {recognized_title} ====")
 
-
-                print(f"==== Nhận diện được title của ảnh là : {recognized_title} ====")
-
                 # Tìm ảnh chữ ký tiếp theo sau ảnh title
-                print(f"==== Nhận diện chữ kí từ ảnh tiếp theo ====")
                 print(f"==== Nhận diện chữ kí từ ảnh tiếp theo ====")
                 for j in range(images.index(image), len(images)):
                     nhandien_chuky = images[j]
                     results_chuky = self.detect_signature(nhandien_chuky)
                     if results_chuky[0]:
                         index_chuky = j  # Lưu vị trí ảnh chữ ký
-                        print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
                         print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
                         break
 
@@ -175,20 +147,11 @@ class TableDetectService:
                 print(f"==== Cho model giải lao trước khi nhận diện thông tin bảng ====")
                 time.sleep(45)
 
-                print(f"==== Cho model giải lao trước khi nhận diện thông tin bảng ====")
-                time.sleep(45)
-
                 # Vòng lặp qua ảnh từ title đến chữ ký để trích xuất bảng
                 if selected_images:
                     print(f"==== Nhận diện thông tin của bảng {recognized_title} ====")
-                    print(f"==== Nhận diện thông tin của bảng {recognized_title} ====")
                     pre_name_column = None
                     for img in selected_images:
-                        processed_image = self.Process_Image(img)
-                         # 2️⃣ Chuyển đổi ảnh sang CMYK và lấy kênh K
-                        _, _, _, black_channel = self.rgb_to_cmyk(processed_image)
-                        # 3️⃣ Điều chỉnh độ sáng & độ tương phản
-                        processed_image = self.adjust_contrast(black_channel, alpha=2.0, beta=-50)
                         processed_image = self.Process_Image(img)
                          # 2️⃣ Chuyển đổi ảnh sang CMYK và lấy kênh K
                         _, _, _, black_channel = self.rgb_to_cmyk(processed_image)
@@ -228,24 +191,11 @@ class TableDetectService:
                                     for column in data_table.columns:
                                         for value in data_table[column].dropna():
                                             value = self.normalize_text(value)
-                                if selected_images.index(img) ==0:
-                                    found = False  # Flag để thoát cả hai vòng lặp khi tìm thấy kết quả
-                                    recognized_title = "Bảng cân đối kế toán"
-                                    for column in data_table.columns:
-                                        for value in data_table[column].dropna():
-                                            value = self.normalize_text(value)
-
                                             if "luu chuyen" in value:
                                                 recognized_title = "Báo cáo lưu chuyển tiền tệ"
                                                 found = True
                                                 break  # Thoát khỏi vòng lặp giá trị trong cột
-                                            if "luu chuyen" in value:
-                                                recognized_title = "Báo cáo lưu chuyển tiền tệ"
-                                                found = True
-                                                break  # Thoát khỏi vòng lặp giá trị trong cột
-
                                             elif "doanh thu ban hang" in value or "ban hang" in value:
-                                                recognized_title = "Báo cáo kết quả hoạt động kinh doanh"
                                                 recognized_title = "Báo cáo KQHĐKD"
                                                 found = True
                                                 break  # Thoát khỏi vòng lặp giá trị trong cột
@@ -253,10 +203,8 @@ class TableDetectService:
                                             break  # Thoát khỏi vòng lặp cột
 
                                 recognized_titles_set.add(recognized_title)
-                                recognized_titles_set.add(recognized_title)
                                 # display(data_table)
                                 if selected_images.index(img) == 0:
-                                    pre_name_column = data_table.columns.tolist()
                                     pre_name_column = data_table.columns.tolist()
                                 else:
                                     if len(data_table.columns) == len(pre_name_column):
@@ -286,13 +234,11 @@ class TableDetectService:
             else:
                 index_start = i + 1
                 # Kiểm tra nếu đã nhận diện đủ bảng tài chính thì dừng
-            if recognized_titles_set == set(financial_tables):
-                print("======== ĐÃ NHẬN DIỆN ĐỦ TẤT CẢ CÁC BẢNG TÀI CHÍNH. DỪNG LẠI !! ========\n\n\n\n")
+            if len(recognized_titles_set) == len(financial_tables):
                 print("======== ĐÃ NHẬN DIỆN ĐỦ TẤT CẢ CÁC BẢNG TÀI CHÍNH. DỪNG LẠI !! ========\n\n\n\n")
                 break
 
         # Lưu kết quả vào file Excel
-        print(f"======== BẤT ĐẦU LƯU DỮ LIỆU VÀO FILE ========")
         print(f"======== BẤT ĐẦU LƯU DỮ LIỆU VÀO FILE ========")
         name, _ = file_name_origin.rsplit(".", 1) if "." in file_name_origin else (file_name_origin, "")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # Định dạng thời gian: YYYYMMDD_HHMMSS
