@@ -131,20 +131,11 @@ class TableDetectService:
                     if json_title:
                         break
                 print("==== Hoàn tất thử API cho nhận diện title ====")
-<<<<<<< HEAD
-                print("==== Kết quả title ====")
-                print(f"{json_title}")
-                print("==== Hoàn tất thử API cho nhận diện title ====")
-                print("==== Kết quả title ====")
-                print(f"{json_title}")
-=======
                 # print("==== Kết quả title ====")
                 # print(f"{json_title}")
->>>>>>> 87188ba (fix: update route response)
 
                 data_title = json_to_dataframe_title(json_title)  # Kết quả title của bảng
                 recognized_title = self.recognize_financial_table(
-                    data_title, financial_tables_general, threshold=80
                     data_title, financial_tables_general, threshold=80
                 )  # Nhận diện xem title của bảng là gì có phù hợp với 3 tên bảng dự án đề ra không
 
@@ -205,10 +196,6 @@ class TableDetectService:
                         processed_image = self.adjust_contrast(black_channel, alpha=2.0, beta=-50)
                         if processed_image is not None:
                             df_table, text_table = self.process_pdf_image(processed_image)
-                            if not df_table.empty:
-                            df_table, text_table = self.process_pdf_image(processed_image)
-                            print(f"Check json data: ", dataframe_to_json(df_table))
-                            print()
                             if not df_table.empty:
                                 if (len(df_table) < 101) and (len(df_table.columns) < 10):
                                     token = 9000
@@ -278,9 +265,6 @@ class TableDetectService:
                                         data_table = data_table.reindex(
                                             columns=pre_name_column, fill_value=None
                                         )
-
-                                if not data_table.empty:
-                                    if recognized_title not in dfs_dict:
                                 if not data_table.empty:
                                     if recognized_title not in dfs_dict:
                                         dfs_dict[recognized_title] = data_table
@@ -295,14 +279,7 @@ class TableDetectService:
                     print(f"==== Hoàn tất nhận diện thông tin bảng {recognized_title} ====")
                     print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} SUCCESS========\n\n\n\n")
                     break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
-                        time.sleep(45)
-                            
-                    print(f"==== Hoàn tất nhận diện thông tin bảng {recognized_title} ====")
-                    print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} SUCCESS========\n\n\n\n")
-                    break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
                 
-            # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
-            if index_chuky:
             # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
             if index_chuky:
                 index_start = index_chuky + 1
@@ -324,9 +301,6 @@ class TableDetectService:
         with pd.ExcelWriter(file_path, engine="xlsxwriter") as writer: # TODO: No module named 'xlsxwriter'
             for i, (sheet_name, df) in enumerate(dfs_dict.items()):
                 df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
-                print(f"==== Đã ghi xong bảng {sheet_name[:31]} vào file ====")
-        print(f"======== DỮ LIỆU ĐÃ ĐƯỢC LƯU VÀO {file_path} ========")
-
                 print(f"==== Đã ghi xong bảng {sheet_name[:31]} vào file ====")
         print(f"======== DỮ LIỆU ĐÃ ĐƯỢC LƯU VÀO {file_path} ========")
 
@@ -451,7 +425,6 @@ class TableDetectService:
     # sử dụng model từ models = ["gemini-2.0-pro-exp-02-05", "gemini-2.0-flash-thinking-exp-01-21"]
     # chuyển API key sang file config
     def generate_title(self, model, API, path_title_json, text_title):
-    def generate_title(self, model, API, path_title_json, text_title):
         result = ""
         client = genai.Client(api_key=f"{API}")
 
@@ -482,7 +455,6 @@ class TableDetectService:
 
         generate_content_config = types.GenerateContentConfig(
             max_output_tokens=8192,
-            response_mime_type="application/json")
             response_mime_type="application/json")
 
         for chunk in client.models.generate_content_stream(
@@ -811,7 +783,6 @@ class TableDetectService:
         return None
 
     def get_model_params(self, model):
-        if model == "gemini-2.0-flash":
         if model == "gemini-2.0-flash":
             return 1, 0.95, 64
         return None
