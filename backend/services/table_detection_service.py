@@ -136,9 +136,20 @@ class TableDetectService:
                     nhandien_chuky = images[j]
                     results_chuky = self.detect_signature(nhandien_chuky)
                     if results_chuky[0]:
-                        index_chuky = j  # Lưu vị trí ảnh chữ ký
-                        print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
-                        break
+                        for r in results_chuky:
+                            for box in r.boxes:
+                                x1, y1, x2, y2 = box.xyxy[0]  # Lấy tọa độ
+                                conf = box.conf[0]  # Lấy độ tin cậy
+                                print(f"Lần 1 - Chữ ký phát hiện: ({x1}, {y1}), ({x2}, {y2}) - Độ chính xác: {conf:.2f}")
+                                
+                                # Cắt ảnh chữ ký
+                                cropped_img = self.crop_signature(nhandien_chuky, (x1, y1, x2, y2))                
+                                # Nhận diện lại trên ảnh đã cắt
+                                new_results = model(cropped_img)
+                                if new_results[0]:
+                                    index_chuky = j
+                                    print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
+                                    break
 
                 # Lấy danh sách ảnh từ title đến chữ ký
                 if index_chuky:
@@ -632,7 +643,12 @@ class TableDetectService:
 
     # model nhận diện chữ kí
     def detect_signature(self, image):
-        return self.signature_detection_model(image, conf=0.7)
+        return self.signature_detection_model(image, conf=0.15)
+
+    def crop_signature(self, image, bbox, margin=10):
+        x1, y1, x2, y2 = map(int, bbox[:4])
+        x1, y1, x2, y2 = x1 - margin, y1 - margin, x2 + margin, y2 + margin  # Thêm margin
+        return image.crop((max(x1, 0), max(y1, 0), min(x2, image.width), min(y2, image.height)))
 
     # model nhận diện table title
     def detect_and_extract_title(self, image):
