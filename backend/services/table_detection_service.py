@@ -23,11 +23,12 @@ from datetime import datetime
 # import base64
 # import tempfile
 
-from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, POPPLER_PATH, financial_tables, model, EXTRACTED_FOLDER, financial_tables_general
+from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, financial_tables, model, EXTRACTED_FOLDER, financial_tables_general
 from utils import retry_api_call, dataframe_to_json, json_to_dataframe_table, json_to_dataframe_title
-from secret import api_keys
+# from secret import api_keys
 
-
+api_keys_str = os.getenv("API_KEYS", "{}")  # Lấy giá trị từ env, mặc định là "{}"
+api_keys = json.loads(api_keys_str)
 class TableDetectService:
     def __init__(self):
         print("TableDetectService: Khởi tạo là load model...")
@@ -132,7 +133,8 @@ class TableDetectService:
 
                 # Tìm ảnh chữ ký tiếp theo sau ảnh title
                 print(f"==== Nhận diện chữ kí từ ảnh tiếp theo ====")
-                for j in range(images.index(image), len(images)):
+                found_signature = False
+                for j in range(images.index(image), len(images)):  
                     nhandien_chuky = images[j]
                     results_chuky = self.detect_signature(nhandien_chuky)
                     if results_chuky[0]:
@@ -145,11 +147,18 @@ class TableDetectService:
                                 # Cắt ảnh chữ ký
                                 cropped_img = self.crop_signature(nhandien_chuky, (x1, y1, x2, y2))                
                                 # Nhận diện lại trên ảnh đã cắt
-                                new_results = model(cropped_img)
+                                new_results = self.detect_signature(cropped_img)
+                                
                                 if new_results[0]:
                                     index_chuky = j
                                     print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
-                                    break
+                                    found_signature = True  # Đánh dấu đã tìm thấy chữ ký
+                                    break  # Thoát khỏi vòng lặp nhỏ nhất
+                            if found_signature:
+                                break
+                        # Nếu tìm thấy chữ ký, thoát khỏi vòng lặp `for j in range(...)`
+                        if found_signature:
+                            break
 
                 # Lấy danh sách ảnh từ title đến chữ ký
                 if index_chuky:
@@ -325,7 +334,8 @@ class TableDetectService:
         adjusted = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
         return adjusted
     def pdf_to_images(self, pdf_path):
-        images = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
+        # images = convert_from_path(pdf_path, poppler_path=POPPLER_PATH)
+        images = convert_from_path(pdf_path)
         return images
 
     # model table_title_detection_model
@@ -643,7 +653,7 @@ class TableDetectService:
 
     # model nhận diện chữ kí
     def detect_signature(self, image):
-        return self.signature_detection_model(image, conf=0.15)
+        return self.signature_detection_model(image)
 
     def crop_signature(self, image, bbox, margin=10):
         x1, y1, x2, y2 = map(int, bbox[:4])

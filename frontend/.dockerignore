@@ -1,0 +1,18 @@
+# Thư mục virtual env
+venv/
+.env/
+__pycache__/
+*.pyc
+
+# File cấu hình IDE
+*.log
+*.sqlite3
+*.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore

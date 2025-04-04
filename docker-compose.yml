@@ -1,0 +1,35 @@
+services:
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${STREAMLIT_PORT_MAP_OUT}:8501"
+    volumes:
+      - ./frontend:/app # Chỉ nên mount trong môi trường dev, trên prod thì ko nên thì nó sẽ mount lun những thư mục trong dockerignore
+      - /app/venv
+    networks:
+      - app
+    container_name: frontend
+    env_file:
+    - .env
+
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "${FASTAPI_PORT_MAP_OUT}:8080"
+    mem_limit: 6g
+    volumes:
+      - ./backend:/app # Chỉ nên mount trong môi trường dev, trên prod thì ko nên thì nó sẽ mount lun những thư mục trong dockerignore
+      - /app/venv
+    networks:
+      - app
+    container_name: backend
+    env_file:
+    - .env
+
+networks:
+  app:
+    driver: bridge
