@@ -1,7 +1,6 @@
-import os
 # Cấu hình địa chỉ, port của backend server
-SERVER_ADDRESS = os.getenv("SERVER_ADDRESS")
-SERVER_PORT = os.getenv("SERVER_PORT")
+SERVER_ADDRESS = "http://localhost"
+SERVER_PORT = 8080
 API_URL = f"{SERVER_ADDRESS}:{SERVER_PORT}"
 
 # Cấu hình các endpoint
