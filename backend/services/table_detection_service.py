@@ -24,8 +24,9 @@ from datetime import datetime
 # import tempfile
 
 from core.config import MODEL_SIGNATURE_PATH, MODEL_TABLE_TITLE_PATH, DEVICE, POPPLER_PATH, financial_tables, model, EXTRACTED_FOLDER, financial_tables_general
+from core.config import financial_tables, model, financial_tables_general
+from core.config import api_keys
 from utils import retry_api_call, dataframe_to_json, json_to_dataframe_table, json_to_dataframe_title
-from secret import api_keys
 
 
 class TableDetectService:
@@ -125,7 +126,7 @@ class TableDetectService:
                     print(f"==== Không tìm thấy title trong ảnh ====")
                     print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} NO_TITLE========\n\n\n\n")
                     # Để sleep để giúp model nghỉ, bị limit 1 phút không quá 2 lần
-                    time.sleep(45)
+                    # time.sleep(45)
                     continue
 
                 print(f"==== Nhận diện được title của ảnh là : {recognized_title} ====")
@@ -139,24 +140,24 @@ class TableDetectService:
                         for r in results_chuky:
                             for box in r.boxes:
                                 x1, y1, x2, y2 = box.xyxy[0]  # Lấy tọa độ
-                                conf = box.conf[0]  # Lấy độ tin cậy
-                                print(f"Lần 1 - Chữ ký phát hiện: ({x1}, {y1}), ({x2}, {y2}) - Độ chính xác: {conf:.2f}")
-                                
                                 # Cắt ảnh chữ ký
                                 cropped_img = self.crop_signature(nhandien_chuky, (x1, y1, x2, y2))                
                                 # Nhận diện lại trên ảnh đã cắt
-                                new_results = model(cropped_img)
+                                new_results = self.detect_signature(cropped_img)
                                 if new_results[0]:
                                     index_chuky = j
                                     print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
                                     break
-
+                            if new_results[0]:
+                                break
+                        if new_results[0]:
+                            break
                 # Lấy danh sách ảnh từ title đến chữ ký
                 if index_chuky:
                     selected_images.extend(images[images.index(image) : index_chuky + 1])
 
                 print(f"==== Cho model giải lao trước khi nhận diện thông tin bảng ====")
-                time.sleep(45)
+                # time.sleep(45)
 
                 # Vòng lặp qua ảnh từ title đến chữ ký để trích xuất bảng
                 if selected_images:
@@ -233,12 +234,12 @@ class TableDetectService:
                                             ignore_index=True,
                                         )
                         print(f"==== Cho model giải lao trước khi nhận diện bảng tiếp theo ====")
-                        time.sleep(45)
+                        # time.sleep(45)
                             
                     print(f"==== Hoàn tất nhận diện thông tin bảng {recognized_title} ====")
                     print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} SUCCESS========\n\n\n\n")
                     break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
-                
+               
             # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
             if index_chuky:
                 index_start = index_chuky + 1
@@ -643,7 +644,7 @@ class TableDetectService:
 
     # model nhận diện chữ kí
     def detect_signature(self, image):
-        return self.signature_detection_model(image, conf=0.15)
+        return self.signature_detection_model(image)
 
     def crop_signature(self, image, bbox, margin=10):
         x1, y1, x2, y2 = map(int, bbox[:4])
