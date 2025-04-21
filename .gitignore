@@ -8,3 +8,6 @@ uploads/
 model
 output.json
 secret.py
+chroma_db
+
+.env
