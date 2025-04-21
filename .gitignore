@@ -8,3 +8,5 @@ uploads/
 model
 output.json
 secret.py
+
+.env
