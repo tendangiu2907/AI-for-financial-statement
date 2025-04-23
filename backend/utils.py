@@ -7,16 +7,7 @@ from fastapi import UploadFile
 import os
 from core.config import ALLOWED_EXTENSIONS
 import re
-import pandas as pd
 
-from langchain.memory import ConversationBufferMemory
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
-from services.chatbot_service import ChatBotService
-
-# Detect table utils
 def save_temp_pdf(file: UploadFile, upload_dir: str) -> str:
     """Lưu file PDF vào thư mục chỉ định."""
     file_path = os.path.join(upload_dir, file.filename)
@@ -135,46 +126,3 @@ def process_dataframe(df):
 
 def allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-
-# Chatbot utils
-def convert_excel_to_json(data_path):
-    
-    data = pd.read_excel(data_path, sheet_name=None)
-    json_output = {sheet: df.fillna("").to_dict(orient="records") for sheet, df in data.items()}
-    return json_output
-
-def load_financial_data(data_path): 
-    
-    json_output = convert_excel_to_json(data_path)
-    
-    documents = []
-    for table_name, rows in json_output.items():
-        for row in rows:
-            text = ", ".join([f"{key}: {value}" for key, value in row.items()]) + "."
-            documents.append(Document(page_content=text))
-    
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    chunks = text_splitter.split_documents(documents)
-    
-    embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
-    chroma_db = Chroma.from_documents(
-        documents=chunks,
-        embedding=embedding_model,
-        persist_directory="chroma_db"
-    )
-    
-    return chroma_db, json_output
-
-def create_chatbot_service(data_path: str, llm) :
-    split_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-    conversation_memory = ConversationBufferMemory(memory_key="history")
-    chroma_db, financial_indicators = load_financial_data(data_path)
-
-    return ChatBotService(
-        split_memory=split_memory,
-        conversation_memory=conversation_memory,
-        chroma_db=chroma_db,
-        llm=llm,
-        financial_indicators=financial_indicators
-    )

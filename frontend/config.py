@@ -5,4 +5,3 @@ API_URL = f"{SERVER_ADDRESS}:{SERVER_PORT}"
 
 # Cấu hình các endpoint
 detect_table_endpoint = f"{API_URL}/api/v1/detect_table"
-chat_endpoint = f"{API_URL}/api/v1/chat"
