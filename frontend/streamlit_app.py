@@ -549,15 +549,15 @@ with col1:
                         
                         # Save download URL
                         extracted_file_path = data.get("extracted_file_path")
-
+                        print("Đường dẫn excel đây:",extracted_file_path)
                         if extracted_file_path:
                             st.session_state.download_url = f"{API_URL}{extracted_file_path}"
                             
                             # ✅ Gọi hàm upload_extracted_path
-                            if upload_extracted_path(extracted_file_path):
-                                st.success("Tệp đã được chatbot đọc")
+                            if  upload_extracted_path(f"{extracted_file_path}"):
+                                st.success("File is read by chatbot")
                             else:
-                                st.error("Chatbot đọc tệp không thành công!!")
+                                st.error("Reading file success!!")
         
         # Display results if extraction was completed (nằm ngoài if uploaded_file)
         if st.session_state.extraction_completed:
@@ -614,7 +614,7 @@ with col2:
             st.session_state.messages.append({"role": "user", "content": user_input})
             
             # Xử lý phản hồi từ chatbot
-            with st.spinner("Thinking..."):
+            with st.spinner("..."):
                 result = send_message_to_chatbot(user_input)
                 
                 if result:

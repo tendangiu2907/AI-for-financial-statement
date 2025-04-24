@@ -8,7 +8,6 @@ import os
 from core.config import ALLOWED_EXTENSIONS
 import re
 import pandas as pd
-
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -139,37 +138,35 @@ def allowed_file(filename: str) -> bool:
 
 # Chatbot utils
 def convert_excel_to_json(data_path):
-    
     data = pd.read_excel(data_path, sheet_name=None)
     json_output = {sheet: df.fillna("").to_dict(orient="records") for sheet, df in data.items()}
-    return json_output
+    financial_indicators=json_output
+    return json_output,financial_indicators
 
-def load_financial_data(data_path): 
-    
-    json_output = convert_excel_to_json(data_path)
-    
+def load_financial_data(json_output): 
     documents = []
     for table_name, rows in json_output.items():
         for row in rows:
             text = ", ".join([f"{key}: {value}" for key, value in row.items()]) + "."
             documents.append(Document(page_content=text))
-    
+
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     chunks = text_splitter.split_documents(documents)
-    
+
     embedding_model = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
     chroma_db = Chroma.from_documents(
         documents=chunks,
         embedding=embedding_model,
         persist_directory="chroma_db"
     )
-    
-    return chroma_db, json_output
+    return chroma_db
 
-def create_chatbot_service(data_path: str, llm) -> ChatBotService :
+
+def create_chatbot_service(data_path: str, llm) -> ChatBotService:
+    json_output, financial_indicators = convert_excel_to_json(data_path)
     split_memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
     conversation_memory = ConversationBufferMemory(memory_key="history")
-    chroma_db, financial_indicators = load_financial_data(data_path)
+    chroma_db = load_financial_data(json_output)
 
     return ChatBotService(
         split_memory=split_memory,
