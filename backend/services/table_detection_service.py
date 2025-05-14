@@ -71,7 +71,6 @@ class TableDetectService:
         recognized_titles_set = set()
         dfs_dict = {}
 
-
         images = self.pdf_to_images(pdf_path)  # Chuyển pdf thành hình ảnh
 
         index_start = 0  # Bắt đầu từ ảnh đầu tiên
@@ -145,14 +144,12 @@ class TableDetectService:
                                 # Nhận diện lại trên ảnh đã cắt
                                 new_results = self.detect_signature(cropped_img)
                                 if new_results[0]:
-                                    index_chuky = j
-                                    print(f"==== Ảnh chữ ký được phát hiện ở ảnh thứ {index_chuky +1 } ====")
                                     break
                             if new_results[0]:
                                 break
                         if new_results[0]:
-                            break
-                # Lấy danh sách ảnh từ title đến chữ ký
+                                break
+                    # Lấy danh sách ảnh từ title đến chữ ký
                 if index_chuky:
                     selected_images.extend(images[images.index(image) : index_chuky + 1])
 
@@ -238,7 +235,7 @@ class TableDetectService:
                             
                     print(f"==== Hoàn tất nhận diện thông tin bảng {recognized_title} ====")
                     print(f"======== KÉT THÚC XỬ LÝ ẢNH {i+1} SUCCESS========\n\n\n\n")
-                    break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
+                break # beak để cập nhật lại ví trí bắt đầu là vị trí kế tiếp của ảnh có chữ kí
                
             # Cập nhật vị trí bắt đầu cho vòng lặp tiếp theo
             if index_chuky:
@@ -261,9 +258,8 @@ class TableDetectService:
                 df.to_excel(writer, sheet_name=sheet_name[:31], index=False)
                 print(f"==== Đã ghi xong bảng {sheet_name[:31]} vào file ====")
         print(f"======== DỮ LIỆU ĐÃ ĐƯỢC LƯU VÀO {file_path} ========")
-
         download_url = f"/{EXTRACTED_FOLDER}/{new_name}"
-        return dfs_dict, download_url
+        return dfs_dict, download_url            
     
     def rgb_to_cmyk(self,image):
         """ Chuyển đổi ảnh từ RGB sang không gian màu CMYK """
@@ -749,197 +745,3 @@ class TableDetectService:
         if model == "gemini-2.0-flash":
             return 1, 0.95, 64
         return None
-
-    def generate_table_1(self, model, API, path_dataframe_json, text_table, token, table_columns):
-        result = ""
-        client = genai.Client(api_key=f"{API}")
-
-        # Mở file JSON và đọc nội dung
-        with open(path_dataframe_json, "r", encoding="utf-8") as f:
-            json_content = json.load(f)
-
-        contents = [
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_text(
-                        text=f"""Mình đang trích xuất dữ liệu từ hình ảnh chứa bảng tài chính bằng PaddleOCR. Dữ liệu nhận diện được lưu trong {text_table}.
-    Tuy nhiên, dữ liệu gặp lỗi:
-    - Sai chính tả tiếng Việt
-    - Lỗi ngữ pháp tiếng Việt
-    - Sắp xếp sai dòng/cột, ảnh hưởng đến tính chính xác của báo cáo tài chính.
-
-    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Yêu cầu kết quả trả về chuẩn định dạng DataFrame không gặp bất kỳ lỗi nào chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
-    đảm bảo đúng thông tin được truyền vào từ biến {text_table} và Dữ liệu JSON gốc không sai kết quả.
-    Đây là báo cáo kết quả hoạt động kinh doanh của công ty ABC.
-    Bạn hãy kiểm tra nếu danh sách tên cột {table_columns} rỗng thì hãy nhận diện để đặt tên cột mặc định bắt buộc phải có chứa 3 cột: "Mã số", "Tên chỉ tiêu", "Thuyết minh" và chuẩn hóa các cột sau: "Mã số", "Tên chỉ tiêu", "Thuyết minh".
-    Nếu danh sách tên cột {table_columns} không rỗng thì hãy đặt tên cột giống như từng giá trị trong {table_columns} và chuẩn hóa chúng đúng với kiến thức quan trọng cần thiết trong báo cáo tài chính.
-    Tự động nhận diện và chuẩn hóa các cột số liệu, đảm bảo chúng được hiển thị đúng định dạng (ví dụ: số nguyên, số thập phân, đơn vị tiền tệ).
-    Nếu có thể, hãy xác định năm tài chính được đề cập trong báo cáo và sử dụng thông tin này để đặt tên cho các cột số liệu (ví dụ: "Năm 2022", "Năm 2023").
-    Sử dụng tên cột có dấu cách và viết hoa chữ cái đầu tiên của mỗi từ.
-
-    Dữ liệu JSON gốc:
-    {json.dumps(json_content, indent=2, ensure_ascii=False)}
-    """
-                    ),
-                ],
-            ),
-        ]
-
-        generate_content_config = types.GenerateContentConfig(
-            max_output_tokens=token,
-            response_mime_type="application/json",
-            response_schema={
-                "type": "object",
-                "properties": {
-                    "Bảng cân đối kế toán": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "string"},
-                                "Số cuối năm": {"type": "string"},
-                                "Số đầu năm": {"type": "string"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số cuối năm", "Số đầu năm"]
-                        }
-                    },
-                    "Báo cáo kết quả hoạt động kinh doanh": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "number"},
-                                "Số Năm Nay": {"type": "number"},
-                                "Số Năm Trước": {"type": "number"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
-                        }
-                    },
-                    "Báo cáo lưu chuyển tiền tệ": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "number"},
-                                "Số Năm Nay": {"type": "number"},
-                                "Số Năm Trước": {"type": "number"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
-                        }
-                    }
-                },
-                "required": ["Bảng cân đối kế toán", "Báo cáo kết quả hoạt động kinh doanh", "Báo cáo lưu chuyển tiền tệ"]
-            }
-        )
-
-        for chunk in client.models.generate_content_stream(
-            model=model,
-            contents=contents,
-            config=generate_content_config,
-        ):
-            result += chunk.text
-        return result
-
-    def generate_table_1(self, model, API, path_dataframe_json, text_table, token, table_columns):
-        result = ""
-        client = genai.Client(api_key=f"{API}")
-
-        # Mở file JSON và đọc nội dung
-        with open(path_dataframe_json, "r", encoding="utf-8") as f:
-            json_content = json.load(f)
-
-        contents = [
-            types.Content(
-                role="user",
-                parts=[
-                    types.Part.from_text(
-                        text=f"""Mình đang trích xuất dữ liệu từ hình ảnh chứa bảng tài chính bằng PaddleOCR. Dữ liệu nhận diện được lưu trong {text_table}.
-    Tuy nhiên, dữ liệu gặp lỗi:
-    - Sai chính tả tiếng Việt
-    - Lỗi ngữ pháp tiếng Việt
-    - Sắp xếp sai dòng/cột, ảnh hưởng đến tính chính xác của báo cáo tài chính.
-
-    Bạn hãy giúp mình chuẩn hóa lại bảng dữ liệu dựa vào bối cảnh và ký tự nhận diện được trong {text_table} và kiến thức chuyên ngành tài chính, kế toán, đảm bảo đúng thuật ngữ, chính tả và cấu trúc bảng hợp lý (gồm dòng, cột, tiêu đề cột, dữ liệu trong bảng). Yêu cầu kết quả trả về chuẩn định dạng DataFrame không gặp bất kỳ lỗi nào chuẩn theo đúng định dạng bảng báo cáo tài chính cho người dùng dễ dàng đọc hiểu,
-    đảm bảo đúng thông tin được truyền vào từ biến {text_table} và Dữ liệu JSON gốc không sai kết quả.
-    Đây là báo cáo kết quả hoạt động kinh doanh của công ty ABC.
-    Bạn hãy kiểm tra nếu danh sách tên cột {table_columns} rỗng thì hãy nhận diện để đặt tên cột mặc định bắt buộc phải có chứa 3 cột: "Mã số", "Tên chỉ tiêu", "Thuyết minh" và chuẩn hóa các cột sau: "Mã số", "Tên chỉ tiêu", "Thuyết minh".
-    Nếu danh sách tên cột {table_columns} không rỗng thì hãy đặt tên cột giống như từng giá trị trong {table_columns} và chuẩn hóa chúng đúng với kiến thức quan trọng cần thiết trong báo cáo tài chính.
-    Tự động nhận diện và chuẩn hóa các cột số liệu, đảm bảo chúng được hiển thị đúng định dạng (ví dụ: số nguyên, số thập phân, đơn vị tiền tệ).
-    Nếu có thể, hãy xác định năm tài chính được đề cập trong báo cáo và sử dụng thông tin này để đặt tên cho các cột số liệu (ví dụ: "Năm 2022", "Năm 2023").
-    Sử dụng tên cột có dấu cách và viết hoa chữ cái đầu tiên của mỗi từ.
-
-    Dữ liệu JSON gốc:
-    {json.dumps(json_content, indent=2, ensure_ascii=False)}
-    """
-                    ),
-                ],
-            ),
-        ]
-
-        generate_content_config = types.GenerateContentConfig(
-            max_output_tokens=token,
-            response_mime_type="application/json",
-            response_schema={
-                "type": "object",
-                "properties": {
-                    "Bảng cân đối kế toán": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "string"},
-                                "Số cuối năm": {"type": "string"},
-                                "Số đầu năm": {"type": "string"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số cuối năm", "Số đầu năm"]
-                        }
-                    },
-                    "Báo cáo kết quả hoạt động kinh doanh": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "number"},
-                                "Số Năm Nay": {"type": "number"},
-                                "Số Năm Trước": {"type": "number"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
-                        }
-                    },
-                    "Báo cáo lưu chuyển tiền tệ": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "Mã Số": {"type": "integer"},
-                                "Tên Chỉ Tiêu": {"type": "string"},
-                                "Thuyết Minh": {"type": "number"},
-                                "Số Năm Nay": {"type": "number"},
-                                "Số Năm Trước": {"type": "number"}
-                            },
-                            "required": ["Mã Số", "Tên Chỉ Tiêu", "Thuyết Minh", "Số Năm Nay", "Số Năm Trước"]
-                        }
-                    }
-                },
-                "required": ["Bảng cân đối kế toán", "Báo cáo kết quả hoạt động kinh doanh", "Báo cáo lưu chuyển tiền tệ"]
-            }
-        )
-
-        for chunk in client.models.generate_content_stream(
-            model=model,
-            contents=contents,
-            config=generate_content_config,
-        ):
-            result += chunk.text
-        return result
