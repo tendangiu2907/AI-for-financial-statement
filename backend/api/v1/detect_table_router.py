@@ -26,24 +26,15 @@ async def detect_table(
         pdf_path = save_temp_pdf(file, UPLOAD_DIR)
 
         # Gọi hàm xử lý từ service
-        df_result, extracted_file_path = table_service.detect_table(pdf_path, file.filename)
+        dfs_dict, extracted_file_path = table_service.detect_table(pdf_path, file.filename)
 
-        # Nếu df_result là dict (nhiều bảng)
-        if isinstance(df_result, dict):
-            result = {
-                "tables": {
-                    key: df.to_dict(orient="records") for key, df in df_result.items()
-                },
-                "extracted_file_path": extracted_file_path,
-            }
-        else:
-            # Nếu df_result chỉ là 1 DataFrame
-            result = {
-                "table": df_result.to_dict(orient="records"),
-                "extracted_file_path": extracted_file_path,
-            }
-
-        # Trả về kết quả
+        # Gộp kết quả thành dictionary
+        result = {
+            "tables": {
+                key: df.to_dict(orient="records") for key, df in dfs_dict.items()
+            },
+            "extracted_file_path": extracted_file_path,
+        }
         return JSONResponse(content=orjson.loads(orjson.dumps(result, option=orjson.OPT_SERIALIZE_NUMPY)))
 
     except Exception as e:
