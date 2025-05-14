@@ -154,7 +154,7 @@ class TableDetectService:
                     selected_images.extend(images[images.index(image) : index_chuky + 1])
 
                 print(f"==== Cho model giải lao trước khi nhận diện thông tin bảng ====")
-                # time.sleep(45)
+                time.sleep(45)
 
                 # Vòng lặp qua ảnh từ title đến chữ ký để trích xuất bảng
                 if selected_images:
